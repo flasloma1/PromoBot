@@ -18,9 +18,9 @@ CONFIG = {
     "api_id": int(os.getenv("TELEGRAM_API_ID")),
     "api_hash": os.getenv("TELEGRAM_API_HASH"),
     "string_session": os.getenv("TELEGRAM_SESSION"),
-    "target_chat_title": os.getenv("TARGET_CHAT"),  # Например "Кальянная Алика (чат)"
+    "target_chat_title": os.getenv("TARGET_CHAT"),  
     "bot_token": os.getenv("BOT_TOKEN"),
-    "bot_target_chat_id": os.getenv("BOT_TARGET_CHAT_ID"),  # Например "@call_flagmen"
+    "bot_target_chat_id": os.getenv("BOT_TARGET_CHAT_ID"), 
     "codes_file": "promo_codes.txt",
 }
 # ------------------------------------------- #
