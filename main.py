@@ -2,6 +2,7 @@ import logging
 import re
 import asyncio
 import httpx
+import os
 from datetime import datetime
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
