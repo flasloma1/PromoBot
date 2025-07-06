@@ -1,7 +1,6 @@
 import logging
 import re
 import asyncio
-import httpx
 import os
 import sys
 from datetime import datetime, timezone
@@ -23,12 +22,13 @@ class Config:
         self.api_hash = os.getenv("TELEGRAM_API_HASH", "")
         self.session = os.getenv("TELEGRAM_SESSION", "")
         self.target_chat = os.getenv("TARGET_CHAT", "")
-        self.bot_token = "8125104552:AAFubdRCSgpCizdb2A78-jsJhQJAVwUs6wA"
-        self.bot_chat_id = os.getenv("BOT_CHAT_ID", "")
         self.codes_file = "promo_codes.txt"
         
+        # ID пользователей для уведомлений (ваш и вашего друга)
+        self.notify_user_ids = [817155267, 6344353030]
+        
         # Проверка обязательных параметров
-        if not all([self.api_id, self.api_hash, self.session, self.target_chat, self.bot_chat_id]):
+        if not all([self.api_id, self.api_hash, self.session, self.target_chat]):
             logger.error("❌ Ошибка конфигурации: Проверьте переменные окружения")
             sys.exit(1)
 
@@ -40,26 +40,23 @@ def extract_promo(text: str) -> list[str]:
     matches = re.findall(r'[A-F0-9*]{12,}', text)
     return [match.replace('*', '0')[:12] for match in matches]
 
-async def send_bot_message(text: str):
-    """Отправляет сообщение через бота"""
-    url = f"https://api.telegram.org/bot{CONFIG.bot_token}/sendMessage"
-    
-    # Параметры запроса
-    payload = {
-        "chat_id": CONFIG.bot_chat_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-    
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            logger.info("✅ Уведомление отправлено")
-        except httpx.HTTPStatusError as e:
-            logger.error(f"❌ Ошибка HTTP {e.response.status_code}: {e.response.text}")
-        except Exception as e:
-            logger.error(f"🚫 Ошибка отправки: {str(e)}")
+async def send_user_notification(client, user_id: int, code: str):
+    """Отправляет уведомление напрямую пользователю"""
+    try:
+        # Формируем сообщение
+        message = (
+            "🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод:\n\n"
+            f"🔥 Код: `{code}`\n"
+            f"💬 Чат: {CONFIG.target_chat}\n"
+            f"🕒 Время: {datetime.now(timezone.utc).strftime('%H:%M:%S')} UTC"
+        )
+        
+        # Отправляем сообщение
+        await client.send_message(user_id, message)
+        logger.info(f"📩 Уведомление отправлено пользователю {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки пользователю {user_id}: {str(e)}")
 
 async def main():
     """Основная функция"""
@@ -74,6 +71,7 @@ async def main():
     
     await client.start()
     logger.info("🔓 Клиент Telegram авторизован")
+    logger.info(f"👤 Ваш ID: {(await client.get_me()).id}")
 
     # Поиск целевого чата
     target_entity = None
@@ -126,13 +124,14 @@ async def main():
             except Exception as e:
                 logger.error(f"⚠️ Ошибка записи промокода: {str(e)}")
             
-            logger.info(f"🎁 Новый промокод: {code}")
+            logger.info(f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод: {code}")
             
-            # Отправка уведомления
-            message = f"🔥 Обнаружен новый промокод: <code>{code}</code>"
-            await send_bot_message(message)
+            # Отправка уведомлений всем указанным пользователям
+            for user_id in CONFIG.notify_user_ids:
+                await send_user_notification(client, user_id, code)
 
     logger.info(f"👂 Ожидание сообщений в чате: {CONFIG.target_chat}")
+    logger.info(f"👥 Уведомления будут отправляться: {CONFIG.notify_user_ids}")
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
