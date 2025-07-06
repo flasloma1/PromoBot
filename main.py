@@ -19,8 +19,9 @@ CONFIG = {
     "api_hash": os.getenv("TELEGRAM_API_HASH"),
     "string_session": os.getenv("TELEGRAM_SESSION"),
     "target_chat_title": os.getenv("TARGET_CHAT"),  # Например "Кальянная Алика (чат)"
-    "bot_token": "7792811749:AAEPG63BBnmdbAwApMVuCpC82ZW3XfKx_O0",  # ← токен бота
-    "bot_target_chat_id": "@call_flagmen",  # ← username чата или ID (если это группа)
+    "bot_token": os.getenv("BOT_TOKEN"),
+    "bot_target_chat_id": os.getenv("BOT_TARGET_CHAT_ID"),  # Например "@call_flagmen"
+    "codes_file": "promo_codes.txt",
 }
 # ------------------------------------------- #
 
@@ -48,7 +49,11 @@ async def send_via_bot(token: str, chat_id: str, text: str):
             logger.error(f"❌ Ошибка отправки через бота: {e}")
 
 async def main():
-    client = TelegramClient(StringSession(CONFIG["session_str"]), CONFIG["api_id"], CONFIG["api_hash"])
+    client = TelegramClient(
+        StringSession(CONFIG["string_session"]),
+        CONFIG["api_id"],
+        CONFIG["api_hash"]
+    )
     await client.start()
     logger.info("✅ Telegram клиент запущен")
 
