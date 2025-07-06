@@ -1,7 +1,7 @@
 # app.py
 import os, asyncio
-from flask import Flask
-from bot import run_bot   # импортируй свою функцию запуска бота
+from flask import Flask 
+from main import run_bot   # импортируй свою функцию запуска бота
 
 app = Flask(__name__)
 
