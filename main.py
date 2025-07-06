@@ -20,8 +20,8 @@ CONFIG = {
     "api_hash": os.getenv("TELEGRAM_API_HASH"),
     "string_session": os.getenv("TELEGRAM_SESSION"),
     "target_chat": os.getenv("TARGET_CHAT"),
-    "bot_token": "8125104552:AAFubdRCSgpCizdb2A78-jsJhQJAVwUs6wA",  # НОВЫЙ ТОКЕН
-    "bot_target_chat": os.getenv("BOT_TARGET_CHAT"),
+    "bot_token": "8125104552:AAFubdRCSgpCizdb2A78-jsJhQJAVwUs6wA",
+    "bot_target_chat": os.getenv("BOT_TARGET_CHAT", "@dino_promo_bot"),  # Изменено значение по умолчанию
     "codes_file": "promo_codes.txt"
 }
 
@@ -33,6 +33,11 @@ def extract_promo(text: str) -> list[str]:
 
 async def send_bot_message(text: str):
     """Отправляет сообщение через бота"""
+    # Добавлена проверка целевого чата
+    if not CONFIG["bot_target_chat"]:
+        logger.error("❌ Не указан целевой чат для бота")
+        return
+        
     url = f"https://api.telegram.org/bot{CONFIG['bot_token']}/sendMessage"
     payload = {
         "chat_id": CONFIG["bot_target_chat"],
@@ -46,12 +51,17 @@ async def send_bot_message(text: str):
             if response.status_code == 200:
                 logger.info("✅ Уведомление отправлено")
             else:
-                logger.error(f"❌ Ошибка: {response.text}")
+                # Добавлено больше информации об ошибке
+                error_msg = response.json().get('description', 'Unknown error')
+                logger.error(f"❌ Ошибка Telegram API ({response.status_code}): {error_msg}")
         except Exception as e:
             logger.error(f"🚫 Сбой отправки: {e}")
 
 async def main():
     """Основная функция"""
+    # Проверка конфигурации
+    logger.info(f"🔍 Конфигурация: Target chat: {CONFIG['target_chat']}, Bot target: {CONFIG['bot_target_chat']}")
+    
     # Инициализация клиента Telegram
     client = TelegramClient(
         StringSession(CONFIG["string_session"]),
@@ -65,8 +75,10 @@ async def main():
     # Поиск целевого чата
     target_chat = None
     async for dialog in client.iter_dialogs():
+        logger.info(f"🔎 Найден чат: {dialog.name} (ID: {dialog.id})")
         if dialog.name == CONFIG["target_chat"]:
             target_chat = dialog.entity
+            logger.info(f"🎯 Целевой чат найден: {dialog.name}")
             break
 
     if not target_chat:
@@ -108,13 +120,8 @@ async def main():
             
             logger.info(f"🎁 Новый промокод: {code}")
             
-            # Отправка уведомления
-            message = (
-                f"🔥 Обнаружен новый промокод!\n\n"
-                f"<b>Код:</b> <code>{code}</code>\n"
-                f"<b>Чат:</b> {CONFIG['target_chat']}\n"
-                f"<b>Время:</b> {timestamp.split('T')[1][:8]} UTC"
-            )
+            # Отправка уведомления (упрощенное сообщение для теста)
+            message = f"🔥 Новый промокод: {code}"
             await send_bot_message(message)
 
     logger.info(f"👂 Ожидание сообщений в чате: {CONFIG['target_chat']}")
