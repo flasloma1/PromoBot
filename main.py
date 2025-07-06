@@ -134,6 +134,10 @@ async def main():
     logger.info(f"👥 Уведомления будут отправляться: {CONFIG.notify_user_ids}")
     await client.run_until_disconnected()
 
+# 👇 Добавляем эту функцию, чтобы app.py мог импортировать её
+async def run_bot():
+    await main()
+
 if __name__ == "__main__":
     try:
         asyncio.run(main())
