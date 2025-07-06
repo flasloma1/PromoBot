@@ -1,104 +1,124 @@
 import logging
 import re
-import os
 import asyncio
-from datetime import datetime
+import httpx
+import os
+from datetime import datetime, timezone
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
-# ---------------- НАСТРОЙКИ ---------------- #
+# Настройки логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
+# Конфигурация из переменных окружения
 CONFIG = {
     "api_id": int(os.getenv("TELEGRAM_API_ID")),
     "api_hash": os.getenv("TELEGRAM_API_HASH"),
     "string_session": os.getenv("TELEGRAM_SESSION"),
-    "target_chat_title": os.getenv("TARGET_CHAT"),  
-    "codes_file": "promo_codes.txt",
+    "target_chat": os.getenv("TARGET_CHAT"),
+    "bot_token": "8125104552:AAFubdRCSgpCizdb2A78-jsJhQJAVwUs6wA",  # НОВЫЙ ТОКЕН
+    "bot_target_chat": os.getenv("BOT_TARGET_CHAT"),
+    "codes_file": "promo_codes.txt"
 }
-# ------------------------------------------- #
 
 def extract_promo(text: str) -> list[str]:
+    """Извлекает промокоды из текста"""
     text = text.upper()
     matches = re.findall(r'[A-F0-9*]{12,}', text)
-    results = []
-    for match in matches:
-        code = match.replace('*', '0')
-        if len(code) >= 12:
-            results.append(code[:12])
-    return results
+    return [match.replace('*', '0')[:12] for match in matches]
+
+async def send_bot_message(text: str):
+    """Отправляет сообщение через бота"""
+    url = f"https://api.telegram.org/bot{CONFIG['bot_token']}/sendMessage"
+    payload = {
+        "chat_id": CONFIG["bot_target_chat"],
+        "text": text,
+        "parse_mode": "HTML"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, json=payload)
+            if response.status_code == 200:
+                logger.info("✅ Уведомление отправлено")
+            else:
+                logger.error(f"❌ Ошибка: {response.text}")
+        except Exception as e:
+            logger.error(f"🚫 Сбой отправки: {e}")
 
 async def main():
-    client = TelegramClient(StringSession(CONFIG["session_str"]), CONFIG["api_id"], CONFIG["api_hash"])
+    """Основная функция"""
+    # Инициализация клиента Telegram
+    client = TelegramClient(
+        StringSession(CONFIG["string_session"]),
+        CONFIG["api_id"],
+        CONFIG["api_hash"]
+    )
+    
     await client.start()
-    logger.info("✅ Telegram клиент запущен")
+    logger.info("🔓 Клиент Telegram авторизован")
 
-    dialogs = await client.get_dialogs()
-    target_entity = None
-    for dialog in dialogs:
-        if dialog.name == CONFIG["target_chat_title"]:
-            target_entity = dialog.entity
+    # Поиск целевого чата
+    target_chat = None
+    async for dialog in client.iter_dialogs():
+        if dialog.name == CONFIG["target_chat"]:
+            target_chat = dialog.entity
             break
 
-    if not target_entity:
-        logger.error(f"Чат с названием '{CONFIG['target_chat_title']}' не найден")
+    if not target_chat:
+        logger.error(f"❌ Чат '{CONFIG['target_chat']}' не найден")
         return
 
-    notify_entities = []
-    for uid in CONFIG["notify_user_ids"]:
-        try:
-            entity = await client.get_entity(uid)
-            notify_entities.append(entity)
-        except Exception as e:
-            logger.warning(f"Не удалось получить entity для {uid}: {e}")
-
+    # Загрузка истории промокодов
     seen_codes = set()
-    try:
-        with open(CONFIG["codes_file"], "r", encoding="utf-8") as f:
-            for line in f:
-                seen_codes.add(line.split(",")[0].strip())
-    except FileNotFoundError:
-        pass
+    if os.path.exists(CONFIG["codes_file"]):
+        with open(CONFIG["codes_file"], "r") as f:
+            seen_codes = {line.split(",")[0] for line in f}
 
-    @client.on(events.NewMessage(chats=target_entity))
-    async def handler(event: events.NewMessage.Event):
-        text = event.message.message
-        matches = extract_promo(text)
-        if not matches:
+    # Обработчик новых сообщений
+    @client.on(events.NewMessage(chats=target_chat))
+    async def message_handler(event):
+        text = event.message.text
+        if not text:
             return
 
-        unique_codes = [c for c in matches if c not in seen_codes]
-
-        if not unique_codes:
-            logger.info("♻️ Повторные промокоды, новых нет")
+        # Поиск промокодов
+        codes = extract_promo(text)
+        if not codes:
             return
 
-        for code in unique_codes:
+        # Фильтрация новых кодов
+        new_codes = [code for code in codes if code not in seen_codes]
+        if not new_codes:
+            logger.info("🔄 Новых промокодов нет")
+            return
+
+        # Обработка новых промокодов
+        for code in new_codes:
             seen_codes.add(code)
-            timestamp = datetime.utcnow().isoformat()
-            with open(CONFIG["codes_file"], "a", encoding="utf-8") as f:
+            timestamp = datetime.now(timezone.utc).isoformat()
+            
+            # Запись в файл
+            with open(CONFIG["codes_file"], "a") as f:
                 f.write(f"{code},{timestamp}\n")
-            logger.info(f"🎉 Новый промокод: {code}")
+            
+            logger.info(f"🎁 Новый промокод: {code}")
+            
+            # Отправка уведомления
+            message = (
+                f"🔥 Обнаружен новый промокод!\n\n"
+                f"<b>Код:</b> <code>{code}</code>\n"
+                f"<b>Чат:</b> {CONFIG['target_chat']}\n"
+                f"<b>Время:</b> {timestamp.split('T')[1][:8]} UTC"
+            )
+            await send_bot_message(message)
 
-            for entity in notify_entities:
-                try:
-                    await client.send_message(
-                        entity,
-                        f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод: {code}"
-                    )
-                    logger.info(f"📩 Уведомление отправлено {entity.id}")
-                except Exception as e:
-                    logger.error(f"Ошибка при отправке уведомления: {e}")
-
-    logger.info(f"👂 Ожидаю сообщения в чате: {CONFIG['target_chat_title']}")
+    logger.info(f"👂 Ожидание сообщений в чате: {CONFIG['target_chat']}")
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("⛔ Остановлено пользователем")
+    asyncio.run(main())
