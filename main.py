@@ -83,7 +83,7 @@ async def main():
             timestamp = datetime.utcnow().isoformat()
             with open(CONFIG["codes_file"], "a", encoding="utf-8") as f:
                 f.write(f"{code},{timestamp}\n")
-            logger.info(f"🎉 Новый промокод: {code}")
+            logger.info(f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод: {code}")
 
             for entity in notify_entities:
                 try:
