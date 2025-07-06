@@ -87,7 +87,7 @@ async def main():
 
             for entity in notify_entities:
                 try:
-                    await client.send_message(entity, f"Найден промокод: {code}")
+                    await client.send_message(entity, f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод: {code}")
                     logger.info(f"📩 Уведомление отправлено пользователю {entity.id}")
                 except Exception as e:
                     logger.error(f"❌ Ошибка при отправке уведомления: {e}")
