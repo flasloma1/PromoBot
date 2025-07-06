@@ -18,8 +18,8 @@ CONFIG = {
     "api_hash": os.getenv("TELEGRAM_API_HASH"),
     "string_session": os.getenv("TELEGRAM_SESSION"),
     "target_chat_title": os.getenv("TARGET_CHAT"),  # Например "Кальянная Алика (чат)"
-    "codes_file": "promo_codes.txt",
-    "notify_user_ids": [817155267, 6344353030],  # ID пользователей, которым отправлять уведомления
+    "bot_token": "7792811749:AAEPG63BBnmdbAwApMVuCpC82ZW3XfKx_O0",  # ← токен бота
+    "bot_target_chat_id": "@call_flagmen",  # ← username чата или ID (если это группа)
 }
 # ------------------------------------------- #
 
@@ -33,8 +33,21 @@ def extract_promo(text: str) -> list[str]:
             results.append(code[:12])
     return results
 
+async def send_via_bot(token: str, chat_id: str, text: str):
+    async with httpx.AsyncClient() as client:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text}
+        try:
+            response = await client.post(url, json=payload)
+            if response.status_code == 200:
+                logger.info(f"📩 Уведомление отправлено в {chat_id}")
+            else:
+                logger.error(f"❌ Ошибка отправки: {response.text}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки через бота: {e}")
+
 async def main():
-    client = TelegramClient(StringSession(CONFIG["string_session"]), CONFIG["api_id"], CONFIG["api_hash"])
+    client = TelegramClient(StringSession(CONFIG["session_str"]), CONFIG["api_id"], CONFIG["api_hash"])
     await client.start()
     logger.info("✅ Telegram клиент запущен")
 
@@ -46,16 +59,8 @@ async def main():
             break
 
     if not target_entity:
-        logger.error(f"❌ Чат с названием '{CONFIG['target_chat_title']}' не найден")
+        logger.error(f"Чат с названием '{CONFIG['target_chat_title']}' не найден")
         return
-
-    notify_entities = []
-    for uid in CONFIG["notify_user_ids"]:
-        try:
-            entity = await client.get_entity(uid)
-            notify_entities.append(entity)
-        except Exception as e:
-            logger.warning(f"⚠️ Не удалось получить entity для {uid}: {e}")
 
     seen_codes = set()
     try:
@@ -83,14 +88,13 @@ async def main():
             timestamp = datetime.utcnow().isoformat()
             with open(CONFIG["codes_file"], "a", encoding="utf-8") as f:
                 f.write(f"{code},{timestamp}\n")
-            logger.info(f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод: {code}")
+            logger.info(f"🎉 Новый промокод: {code}")
 
-            for entity in notify_entities:
-                try:
-                    await client.send_message(entity, f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ, спасибо владу за такой промокод: {code}")
-                    logger.info(f"📩 Уведомление отправлено пользователю {entity.id}")
-                except Exception as e:
-                    logger.error(f"❌ Ошибка при отправке уведомления: {e}")
+            message = (
+                f"🎉 ПРОМИК ЧЕХЛЕО ЖЕ ЕСТЬ Я ЕГО ВСЕ ЦЕЛОВАЛ,\n"
+                f"спасибо владу за такой промокод: {code}"
+            )
+            await send_via_bot(CONFIG["bot_token"], CONFIG["bot_target_chat_id"], message)
 
     logger.info(f"👂 Ожидаю сообщения в чате: {CONFIG['target_chat_title']}")
     await client.run_until_disconnected()
