@@ -4,6 +4,7 @@ import asyncio
 import os
 from datetime import datetime
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 
 # ---------------- НАСТРОЙКИ ---------------- #
 logging.basicConfig(
@@ -15,10 +16,10 @@ logger = logging.getLogger(__name__)
 CONFIG = {
     "api_id": int(os.getenv("TELEGRAM_API_ID")),
     "api_hash": os.getenv("TELEGRAM_API_HASH"),
-    "phone": os.getenv("TELEGRAM_PHONE"),
+    "string_session": os.getenv("TELEGRAM_SESSION"),
     "target_chat_title": os.getenv("TARGET_CHAT"),  # Например "Кальянная Алика (чат)"
     "codes_file": "promo_codes.txt",
-    "notify_user_ids": [817155267, 6344353030],  # друг и ты
+    "notify_user_ids": [817155267, 6344353030],  # ID пользователей, которым отправлять уведомления
 }
 # ------------------------------------------- #
 
@@ -33,8 +34,8 @@ def extract_promo(text: str) -> list[str]:
     return results
 
 async def main():
-    client = TelegramClient("promo_session", CONFIG["api_id"], CONFIG["api_hash"])
-    await client.start(phone=CONFIG["phone"])
+    client = TelegramClient(StringSession(CONFIG["string_session"]), CONFIG["api_id"], CONFIG["api_hash"])
+    await client.start()
     logger.info("✅ Telegram клиент запущен")
 
     dialogs = await client.get_dialogs()
@@ -45,7 +46,7 @@ async def main():
             break
 
     if not target_entity:
-        logger.error(f"Чат с названием '{CONFIG['target_chat_title']}' не найден")
+        logger.error(f"❌ Чат с названием '{CONFIG['target_chat_title']}' не найден")
         return
 
     notify_entities = []
@@ -54,7 +55,7 @@ async def main():
             entity = await client.get_entity(uid)
             notify_entities.append(entity)
         except Exception as e:
-            logger.warning(f"Не удалось получить entity для {uid}: {e}")
+            logger.warning(f"⚠️ Не удалось получить entity для {uid}: {e}")
 
     seen_codes = set()
     try:
@@ -87,9 +88,9 @@ async def main():
             for entity in notify_entities:
                 try:
                     await client.send_message(entity, f"Найден промокод: {code}")
-                    logger.info(f"📩 Уведомление отправлено {entity.id}")
+                    logger.info(f"📩 Уведомление отправлено пользователю {entity.id}")
                 except Exception as e:
-                    logger.error(f"Ошибка при отправке уведомления: {e}")
+                    logger.error(f"❌ Ошибка при отправке уведомления: {e}")
 
     logger.info(f"👂 Ожидаю сообщения в чате: {CONFIG['target_chat_title']}")
     await client.run_until_disconnected()
